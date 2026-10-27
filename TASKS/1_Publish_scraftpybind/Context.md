@@ -125,3 +125,43 @@ repointed to `../aicontexts/RULES/`.
 * 31 tests.  Offline `trace`: `scraftpybind.py` 99.98% (1 of 6299
   uncovered: the `__main__` line), `scraftpybind_generate.py` 91.52%,
   `test_scraftpybind.py` 84.53%.  24 marks.
+
+## 2026-10-26: On GitHub
+
+* https://github.com/waynegramlich/scraftpybind, public, remote
+  `github` (HTTPS), default branch `main`; `main` tracks
+  `github/main`.  First push: `64fe80c` (3 commits), checked with
+  `gh repo view` and `git ls-remote`; `aic` is not in the tree.
+* Next: the testing and release workflows (`check.yml`,
+  `release.yml`) and PyPI Trusted Publishing, per the GitHub Workflow
+  Rules.
+
+## Where things stand (2026-10-26, end of session)
+
+* Done: the copy from `../solidcraft` works; renamed to
+  `scraftpybind` (module, generator, cache, tests, package, console
+  script; class `SolidCraftPyBind`; this task `T.ps`); a 31 test
+  offline suite (`python3 -m unittest`, 6 live tests skipped without
+  `solidcraft-cli`); all checkers clean; on GitHub (public).
+* Conventions settled with the user:
+  * Live tests are not run; the offline tests are what matter.
+  * Every line the offline tests do not reach ends with
+    `# pragma: no cover` (one mark per block, as in `coverage.py`).
+    After a code change, rerun `trace` and keep the marks exact:
+    `python3 -m trace --count --missing --coverdir=DIR
+    --ignore-dir=$(python3 -c 'import sys;print(sys.base_prefix)')
+    --module unittest test_scraftpybind`, then check every `>>>>>>`
+    line in `DIR/*.cover` is inside a marked block and no mark is
+    stale.  Coverage: `scraftpybind.py` 99.98% (only the `__main__`
+    line), `scraftpybind_generate.py` 91.52%, `test_scraftpybind.py`
+    84.53%.
+  * `trace`'s `--no-report` (`-R`) drops the counts file (Python
+    3.12's `trace.py:736`); subprocess tracing was tried and rejected
+    as not worth it, so tests call `main()`s in-process instead.
+* Not doing yet: nothing goes to pypi.org (or test.pypi.org) until
+  somebody asks for the package there, so no `release.yml` and no
+  Trusted Publishing for now.  A `check.yml` testing workflow
+  (Linux, Windows, macOS; Python 3.11 and up) is possible meanwhile,
+  if the user wants it.
+* A private claude.ai page of `README.md`, published by mistake, was
+  deleted at the user's request (2026-10-26).
