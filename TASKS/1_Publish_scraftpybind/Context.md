@@ -61,7 +61,8 @@ repointed to `../aicontexts/RULES/`.
   `PATH=../solidcraft/squashfs-root/usr/bin:$PATH python3 -m unittest`.
 * The user does not expect to run live tests, so the offline tests
   are the ones that matter; the live ones stay as skips.
-* `aic` (a link to `../aicontexts/ai_contexts.py`) is in `.gitignore`.
+* `aic` (a link to `../aicontexts/ai_contexts.py`) was removed from
+  git and disk; the installed `ai_contexts` is used instead.
 * `ruff` 0.17.3 and `uv` 0.13.6 (updated 2026-10-26).
 
 ## 2026-10-26: Renamed `pysolidcraft` to `scraftpybind`

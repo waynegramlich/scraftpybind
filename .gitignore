@@ -17,6 +17,3 @@ dist/
 
 # STEP files written by the examples.
 *.step
-
-# The `ai_contexts` link, which points outside the project.
-aic
