@@ -70,6 +70,9 @@ Point3D: TypeAlias = tuple[float, float, float]  # pylint: disable=invalid-name
 # `engine.batch`), plus a minute of slack.
 REPLY_TIMEOUT: float = 3660.0
 
+# Where SolidCraft is downloaded, for the message when it is missing.
+RELEASES: str = "https://github.com/tangency-labs/solidcraft/releases"
+
 # How long a headless session gets to exit, in seconds: after its
 # output ends, or after its input is closed (it is then killed).
 EXIT_TIMEOUT: float = 10.0
@@ -227,12 +230,21 @@ class ControlTransport(Transport):
         """Connect to SolidCraft, finding the port and token if needed.
 
         Raises:
-        * `OSError`:
-          If no SolidCraft is listening or a file cannot be read.
+        * `FileNotFoundError`:
+          If the port or token file is missing, which usually means
+          that no SolidCraft GUI is running (it deletes its token file
+          when it quits).
+        * `ConnectionRefusedError`: If nothing listens on the port.
+        * `OSError`: If a file cannot be read for another reason.
         """
         # Find the port of the most recently started SolidCraft.
         if self.port == 0:
             port_file: Path = control_dir() / "current.port"
+            if not port_file.exists():
+                raise FileNotFoundError(
+                    f"{port_file} not found: is a SolidCraft GUI running"
+                    " on its default port, as this user?"
+                )
             self.port = int(port_file.read_text().strip())
 
         # Find this launch's token.
@@ -240,12 +252,23 @@ class ControlTransport(Transport):
             self.token = os.environ.get("SOLIDCRAFT_CONTROL_TOKEN", "")
         if not self.token:
             token_file: Path = control_dir() / f"{self.port}.token"
+            if not token_file.exists():
+                raise FileNotFoundError(
+                    f"{token_file} not found: is a SolidCraft GUI running"
+                    f" with `--control {self.port}`, as this user?"
+                )
             self.token = token_file.read_text().strip()
 
         # Open the connection; the token goes with the first request.
-        self.sock = socket.create_connection(
-            (self.host, self.port), timeout=REPLY_TIMEOUT
-        )
+        try:
+            self.sock = socket.create_connection(
+                (self.host, self.port), timeout=REPLY_TIMEOUT
+            )
+        except ConnectionRefusedError as error:
+            raise ConnectionRefusedError(
+                f"{self.host}:{self.port}: nothing is listening: is a"
+                f" SolidCraft GUI running with `--control {self.port}`?"
+            ) from error
         self.reader = self.sock.makefile("r", encoding="utf-8")
         self.next_id = 1
 
@@ -363,7 +386,10 @@ class HeadlessTransport(Transport):
         # Find the program, and the folders it may use.
         program: str | None = shutil.which(self.cli)
         if program is None:
-            raise FileNotFoundError(f"{self.cli}: not found")
+            raise FileNotFoundError(
+                f"{self.cli} not found: install SolidCraft"
+                f" ({RELEASES}) and put `solidcraft-cli` on the `PATH`"
+            )
         folders: Sequence[str] = self.allow_paths or (os.getcwd(),)
         command: list[str] = [program, "mcp", "--headless"]
         folder: str
@@ -19682,8 +19708,24 @@ def main() -> int:
     Returns:
     * (`int`): The exit status.
     """
-    # Connect to the GUI, or start a headless session.
+    # Connect to the GUI, or start a headless session; a SolidCraft
+    # that is not there is reported in one line, not a traceback.
     where: str = sys.argv[1] if len(sys.argv) > 1 else "0"
+    try:
+        _plate(where)
+    except OSError as error:
+        print(f"scraftpybind: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+# Function `_plate()`:
+def _plate(where: str) -> None:
+    """Build the plate with a hole, in a GUI or headless.
+
+    Arguments:
+    * `where` (`str`): A GUI's control port, or `headless`.
+    """
     with connect(where) as transport:
         solidcraft: SolidCraftPyBind = SolidCraftPyBind(transport)
 
@@ -19712,7 +19754,6 @@ def main() -> int:
             step: Path = Path("scraftpybind_plate.step").resolve()
             solidcraft.file.export(path=str(step))
             print(f"Wrote {step}")
-    return 0
 
 
 # Run as a program (only by the live tests).

@@ -15,6 +15,9 @@ python3 -m unittest -v
 ```
 """
 
+# One module holds every test, so it is longer than `pylint` likes.
+# pylint: disable=too-many-lines
+
 import contextlib
 import inspect
 import io
@@ -589,6 +592,48 @@ class TestControlTransport(unittest.TestCase):
         fake.close()
         self.assertEqual(fake.requests[0]["token"], "from-variable")
 
+    # Method `TestControlTransport.test_no_gui()`:
+    def test_no_gui(self) -> None:
+        """No GUI (no port or token file, or no listener) says so."""
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            mock.patch.dict(
+                os.environ,
+                {
+                    "SOLIDCRAFT_CONTROL_DIR": folder,
+                    "SOLIDCRAFT_CONTROL_TOKEN": "",
+                },
+            ),
+        ):
+            # No `current.port` file.
+            with self.assertRaises(FileNotFoundError) as caught:
+                ControlTransport().connect()
+            self.assertIn("default port", str(caught.exception))
+
+            # No token file for the port.
+            with self.assertRaises(FileNotFoundError) as caught:
+                ControlTransport(8080).connect()
+            self.assertIn("`--control 8080`", str(caught.exception))
+
+            # A port that nothing listens on.
+            probe: socket.socket = socket.socket()
+            probe.bind(("127.0.0.1", 0))
+            port: int = probe.getsockname()[1]
+            probe.close()
+            with self.assertRaises(ConnectionRefusedError) as refused:
+                ControlTransport(port, token="t").connect()
+            self.assertIn("nothing is listening", str(refused.exception))
+
+            # The demonstration reports it in one line.
+            errors: io.StringIO = io.StringIO()
+            with (
+                mock.patch.object(sys, "argv", ["scraftpybind", "8080"]),
+                contextlib.redirect_stderr(errors),
+            ):
+                self.assertEqual(scraftpybind.main(), 1)
+            self.assertTrue(errors.getvalue().startswith("scraftpybind: "))
+            self.assertEqual(errors.getvalue().count("\n"), 1)
+
     # Method `TestControlTransport.test_error()`:
     def test_error(self) -> None:
         """An `"ok": false` reply raises `SolidCraftError`."""
@@ -861,9 +906,10 @@ class TestHeadlessTransport(unittest.TestCase):
         """A `cli` that cannot be found raises `FileNotFoundError`."""
         with (
             HeadlessTransport("no-such-solidcraft-cli") as transport,
-            self.assertRaises(FileNotFoundError),
+            self.assertRaises(FileNotFoundError) as caught,
         ):
             transport.request("engine.execute", {})
+        self.assertIn("`PATH`", str(caught.exception))
 
 
 # Class `TestGenerator`:

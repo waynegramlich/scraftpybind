@@ -165,3 +165,36 @@ repointed to `../aicontexts/RULES/`.
   if the user wants it.
 * A private claude.ai page of `README.md`, published by mistake, was
   deleted at the user's request (2026-10-26).
+
+## 2026-10-26: Clear messages when SolidCraft is not there
+
+Asked for by the user while getting `scraftcnc` ready for GitHub (a
+newcomer who runs it without a GUI got a `FileNotFoundError`
+traceback naming a token file).  The GUI deletes its token file when
+it quits, so a missing token file usually means no GUI.
+
+* `ControlTransport.connect()`: a missing `current.port` or token file
+  raises `FileNotFoundError` asking whether a GUI is running (with
+  `--control PORT`, as this user); a refused connection raises
+  `ConnectionRefusedError` saying nothing is listening.
+* `HeadlessTransport.start()`: a missing `solidcraft-cli` names the
+  releases page (`RELEASES`) and the `PATH`.
+* `main()` reports an `OSError` in one line (`scraftpybind: ...`,
+  exit 1); the plate is built by `_plate()`.
+* Tests: `test_no_gui` (all three, plus `main()`), and
+  `test_not_found` checks the message.  `test_scraftpybind.py` now
+  passes 1000 lines, so it quiets `too-many-lines`.  32 tests pass (2
+  skipped with SolidCraft 0.24.0 on the `PATH`); checkers clean;
+  `trace` still finds only the `__main__` line.
+
+## 2026-10-26: Commit email made private
+
+User decision: commits use GitHub's private address
+`2482253+waynegramlich@users.noreply.github.com` (`git config
+user.email` in this repository; the global one is still the real
+address).  Every existing commit was rewritten to it (`git
+fast-export | sed | git fast-import` in scratch, then `git reset
+--soft`); trees, names, dates and messages checked identical.
+`scraftpybind`'s `github/main` still has the old 4 commits, so its
+next push is `git push --force-with-lease github main` (the user
+agreed: nobody has cloned it).
