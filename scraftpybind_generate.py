@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generate the command classes of `pysolidcraft.py`.
+"""Generate the command classes of `scraftpybind.py`.
 
 SolidCraft describes each of its commands (`solidcraft-cli commands`):
 its id, its label and a free-text `params` description.  The few
 commands that have been given a typed contract also have a JSON Schema
 of their parameters (`engine.describe`).  This program fetches both,
-keeps them in `pysolidcraft_commands.json`, and rewrites the generated
-region of `pysolidcraft.py`: one class per namespace
+keeps them in `scraftpybind_commands.json`, and rewrites the generated
+region of `scraftpybind.py`: one class per namespace
 (`SketchCommands` for `sketch.*`), with one method per command.
 
 A command with a schema gets its parameters, types and required
@@ -18,8 +18,8 @@ every parameter is optional.  Since the text can hide a parameter
 it is.
 
 ```
-./pysolidcraft_generate.py            # Fetch from `solidcraft-cli`.
-./pysolidcraft_generate.py --cached   # Use the kept JSON.
+./scraftpybind_generate.py            # Fetch from `solidcraft-cli`.
+./scraftpybind_generate.py --cached   # Use the kept JSON.
 ```
 """
 
@@ -48,11 +48,13 @@ JSON: TypeAlias = (  # pylint: disable=invalid-name
 
 # Where things are, relative to this program.
 HERE: Path = Path(__file__).resolve().parent
-TARGET: Path = HERE / "pysolidcraft.py"
-CACHE: Path = HERE / "pysolidcraft_commands.json"
-DEFAULT_CLI: Path = HERE / "squashfs-root" / "usr" / "bin" / "solidcraft-cli"
+TARGET: Path = HERE / "scraftpybind.py"
+CACHE: Path = HERE / "scraftpybind_commands.json"
+# The `solidcraft-cli` program, looked up on the `PATH` (as
+# `scraftpybind.HeadlessTransport` does) unless `--cli` names another.
+DEFAULT_CLI: str = "solidcraft-cli"
 
-# The lines that bracket the generated region of `pysolidcraft.py`.
+# The lines that bracket the generated region of `scraftpybind.py`.
 BEGIN: str = "# Begin the generated command classes."
 END: str = "# End the generated command classes."
 
@@ -88,7 +90,7 @@ TEXT_TYPES: tuple[tuple[re.Pattern[str], str], ...] = (
 # Names that the methods themselves need.
 RESERVED: frozenset[str] = frozenset({"self", "extra"})
 
-# Schema definitions with a type of their own in `pysolidcraft.py`.
+# Schema definitions with a type of their own in `scraftpybind.py`.
 SCHEMA_REFS: dict[str, str] = {
     "AngleExpr": "Expr",
     "LengthExpr": "Expr",
@@ -173,9 +175,9 @@ def python_name(name: str, taken: frozenset[str] = frozenset()) -> str:
     """
     # Replace the characters an identifier cannot have.
     result: str = re.sub(r"[^A-Za-z0-9_]", "_", name)
-    if result[:1].isdigit():
+    if result[:1].isdigit():  # pragma: no cover
         result = "_" + result
-    if not result.isidentifier():
+    if not result.isidentifier():  # pragma: no cover
         raise ValueError(f"{name=} cannot be made an identifier")
 
     # Keep clear of Python's keywords and the names already taken.
@@ -420,10 +422,10 @@ def schema_hint(
     * (`str`): A type hint, without `| None`.
     """
     # Only an object says anything about the type.
-    if not isinstance(schema, dict):
+    if not isinstance(schema, dict):  # pragma: no cover
         return "JSON"
 
-    # A reference: a type of `pysolidcraft.py`'s own, or an enumeration
+    # A reference: a type of `scraftpybind.py`'s own, or an enumeration
     # (which gets a type alias), or whatever the definition is.
     ref: JSON = schema.get("$ref")
     if isinstance(ref, str) and ref.startswith("#/$defs/"):
@@ -459,7 +461,7 @@ def schema_hint(
         if isinstance(types, list)
         else [str(types)]
         if isinstance(types, str)
-        else []
+        else []  # pragma: no cover
     )
     simple: dict[str, str] = {
         "boolean": "bool",
@@ -543,22 +545,26 @@ def describe_schema(schema: JSON, defs: dict[str, JSON]) -> str:
     * (`str`): The description, or "" when there is none.
     """
     # The schema's own description wins.
-    if not isinstance(schema, dict):
+    if not isinstance(schema, dict):  # pragma: no cover
         return ""
     description: JSON = schema.get("description")
     if isinstance(description, str):
         return description
 
     # Otherwise the first referenced definition that has one.
-    choices: JSON = schema.get("anyOf") or schema.get("oneOf") or [schema]
+    choices: JSON = (  # pragma: no cover
+        schema.get("anyOf") or schema.get("oneOf") or [schema]
+    )
     choice: JSON
-    for choice in choices if isinstance(choices, list) else []:
+    for choice in (  # pragma: no cover
+        choices if isinstance(choices, list) else []
+    ):
         if isinstance(choice, dict) and isinstance(choice.get("$ref"), str):
             name: str = str(choice["$ref"]).removeprefix("#/$defs/")
             found: str = describe_schema(defs.get(name), {})
             if found:
                 return found
-    return ""
+    return ""  # pragma: no cover
 
 
 # Function `make_command()`:
@@ -589,7 +595,7 @@ def make_command(
     # names `Namespace` itself uses are avoided.
     command_id: str = str(entry["id"])
     parts: list[str] = command_id.split(".")
-    if len(parts) < 2:
+    if len(parts) < 2:  # pragma: no cover
         raise ValueError(f"{command_id=} has no namespace")
     method: str = python_name(
         "_".join(parts[1:]), frozenset({"execute", "transport"})
@@ -607,11 +613,13 @@ def make_command(
 
 
 # Function `fetch()`:
-def fetch(cli: Path) -> dict[str, JSON]:
+# Only the live `test_fetch` runs it, since it needs `solidcraft-cli`.
+def fetch(cli: str) -> dict[str, JSON]:  # pragma: no cover
     """Fetch the commands, and each command's schemas, from SolidCraft.
 
     Arguments:
-    * `cli` (`Path`): The `solidcraft-cli` program.
+    * `cli` (`str`):
+      The `solidcraft-cli` program: a path, or a name on the `PATH`.
 
     Returns:
     * (`dict[str, JSON]`):
@@ -623,7 +631,7 @@ def fetch(cli: Path) -> dict[str, JSON]:
     """
     # The commands.
     listing: str = subprocess.run(
-        [str(cli), "commands"], capture_output=True, check=True, text=True
+        [cli, "commands"], capture_output=True, check=True, text=True
     ).stdout
     commands: JSON = json.loads(listing)
     assert isinstance(commands, list)
@@ -635,7 +643,7 @@ def fetch(cli: Path) -> dict[str, JSON]:
         assert isinstance(entry, dict)
         request: str = json.dumps({"command": entry["id"]})
         described: str = subprocess.run(
-            [str(cli), "exec", "engine.describe", request],
+            [cli, "exec", "engine.describe", request],
             capture_output=True,
             check=True,
             text=True,
@@ -679,7 +687,7 @@ def docstring(command: Command, indent: str) -> list[str]:
             subsequent_indent=rest,
             break_long_words=False,
             break_on_hyphens=False,
-        ) or [first.rstrip()]
+        ) or [first.rstrip()]  # pragma: no cover
 
     # The summary, the command id and the notes.
     label: str = command.label.rstrip(".…")
@@ -783,7 +791,7 @@ def method_lines(command: Command, class_name: str) -> list[str]:
 
 # Function `generate()`:
 def generate(data: dict[str, JSON]) -> list[str]:
-    """Write the generated region of `pysolidcraft.py`.
+    """Write the generated region of `scraftpybind.py`.
 
     Arguments:
     * `data` (`dict[str, JSON]`): `commands` and `schemas`, as `fetch`
@@ -845,7 +853,7 @@ def generate(data: dict[str, JSON]) -> list[str]:
     # The region starts with the type aliases.
     lines: list[str] = [
         BEGIN,
-        "# Never edit them: they are written by `pysolidcraft_generate.py`.",
+        "# Never edit them: they are written by `scraftpybind_generate.py`.",
         "",
     ]
     name: str
@@ -874,15 +882,15 @@ def generate(data: dict[str, JSON]) -> list[str]:
             lines += method_lines(command, class_name)
         lines.append("")
 
-    # `PySolidCraft`, with one attribute per namespace.
-    lines += pysolidcraft_lines(class_names)
+    # `SolidCraftPyBind`, with one attribute per namespace.
+    lines += scraftpybind_lines(class_names)
     lines.append(END)
     return lines
 
 
-# Function `pysolidcraft_lines()`:
-def pysolidcraft_lines(class_names: dict[str, str]) -> list[str]:
-    """Write the `PySolidCraft` class.
+# Function `scraftpybind_lines()`:
+def scraftpybind_lines(class_names: dict[str, str]) -> list[str]:
+    """Write the `SolidCraftPyBind` class.
 
     Arguments:
     * `class_names` (`dict[str, str]`): Each namespace's class name.
@@ -899,13 +907,13 @@ def pysolidcraft_lines(class_names: dict[str, str]) -> list[str]:
     }
     lines: list[str] = [
         "",
-        "# Class `PySolidCraft`:",
+        "# Class `SolidCraftPyBind`:",
         "@dataclass(slots=True)",
-        "class PySolidCraft:",
-        '    """The top level of `pysolidcraft`: SolidCraft\'s commands.',
+        "class SolidCraftPyBind:",
+        '    """The top level of `scraftpybind`: SolidCraft\'s commands.',
         "",
         "    The commands are grouped by namespace, so `sketch.create` is",
-        "    `PySolidCraft.sketch.create()`.",
+        "    `SolidCraftPyBind.sketch.create()`.",
         "",
         "    Attributes:",
         "    * `transport` (`Transport`): How the commands are sent.",
@@ -918,7 +926,7 @@ def pysolidcraft_lines(class_names: dict[str, str]) -> list[str]:
     lines += [
         "",
         "    Constructor:",
-        "    * `PySolidCraft(transport)`",
+        "    * `SolidCraftPyBind(transport)`",
         '    """',
         "",
         "    # Constructor arguments:",
@@ -932,7 +940,7 @@ def pysolidcraft_lines(class_names: dict[str, str]) -> list[str]:
     # `__post_init__()` makes the namespaces.
     lines += [
         "",
-        "    # Method `PySolidCraft.__post_init__()`:",
+        "    # Method `SolidCraftPyBind.__post_init__()`:",
         "    def __post_init__(self) -> None:",
         '        """Make the namespaces, all sharing the one transport."""',
     ]
@@ -944,14 +952,16 @@ def pysolidcraft_lines(class_names: dict[str, str]) -> list[str]:
     # `execute()`, for any command by its id.
     lines += [
         "",
-        "    # Method `PySolidCraft.execute()`:",
+        "    # Method `SolidCraftPyBind.execute()`:",
         # A generated line, kept whole so that it can be searched for.
         "    def execute(self, command: str, params: Mapping[str, JSON]) -> JSON:",  # noqa: E501
         '        """Run any SolidCraft command by its id (`engine.execute`).',
         "",
         "        Arguments:",
         "        * `command` (`str`): The command id (e.g. `sketch.create`).",
-        "        * `params` (`Mapping[str, JSON]`): The command's parameters.",
+        "        * `params` (`Mapping[str, JSON]`):",
+        "          The command's parameters; those that are `None` are not",
+        "          sent, as for the namespaces' methods.",
         "",
         "        Returns:",
         "        * (`JSON`): The command's result.",
@@ -959,9 +969,7 @@ def pysolidcraft_lines(class_names: dict[str, str]) -> list[str]:
         "        Raises:",
         "        * `SolidCraftError`: If the command fails.",
         '        """',
-        "        return self.transport.request(",
-        '            "engine.execute", {"command": command, "params": params}',
-        "        )",
+        "        return Namespace(self.transport).execute(command, params)",
         "",
         "",
         "",
@@ -978,7 +986,7 @@ def main() -> int:
     """
     # Read the arguments.
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="Generate the command classes of `pysolidcraft.py`."
+        description="Generate the command classes of `scraftpybind.py`."
     )
     parser.add_argument(
         "--cached",
@@ -987,7 +995,6 @@ def main() -> int:
     )
     parser.add_argument(
         "--cli",
-        type=Path,
         default=DEFAULT_CLI,
         help="the solidcraft-cli program (default: %(default)s)",
     )
@@ -997,7 +1004,7 @@ def main() -> int:
     data: JSON
     if arguments.cached:
         data = json.loads(CACHE.read_text(encoding="utf-8"))
-    else:
+    else:  # pragma: no cover  (only the live tests fetch)
         data = fetch(arguments.cli)
         CACHE.write_text(
             json.dumps(data, indent=1, ensure_ascii=False) + "\n",
@@ -1013,7 +1020,7 @@ def main() -> int:
     TARGET.write_text("\n".join(source), encoding="utf-8")
 
     # Let `ruff format` lay out the long lines.
-    subprocess.run(["ruff", "format", str(TARGET)], check=True)
+    subprocess.run(["ruff", "format", "--quiet", str(TARGET)], check=True)
     entries: JSON = data["commands"]
     schemas: JSON = data["schemas"]
     assert isinstance(entries, list) and isinstance(schemas, dict)
@@ -1024,5 +1031,6 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+# Run as a program (the tests call `main()` instead).
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

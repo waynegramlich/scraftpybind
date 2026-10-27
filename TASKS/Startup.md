@@ -1,1 +1,2 @@
-@1_Publish_pysolidcraft/Details.md
+@1_Publish_scraftpybind/Details.md
+@1_Publish_scraftpybind/Context.md

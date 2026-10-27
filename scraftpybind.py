@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Drive SolidCraft from Python, one method per JSON command.
 
-`PySolidCraft` runs SolidCraft commands (`sketch.create`,
+`SolidCraftPyBind` runs SolidCraft commands (`sketch.create`,
 `solid.extrude`, ...) through a `Transport`:
 * `ControlTransport` talks to a running SolidCraft GUI over its control
   port (SolidCraft's `docs/control-protocol.md`: one JSON request per
@@ -12,17 +12,17 @@
 
 Each command is one method, in a class named after the command's
 namespace: `sketch.rectangle.center` is
-`PySolidCraft.sketch.rectangle_center()`.  Parameters left at `None`
+`SolidCraftPyBind.sketch.rectangle_center()`.  Parameters left at `None`
 are not sent, so SolidCraft uses its own defaults for them.
 
 Run directly, it builds a 100 x 60 x 10 mm plate with a 20 mm hole,
 either in a GUI started with `solidcraft --control PORT`, or headless
 (which is only useful with `file.export`, so it exports
-`pysolidcraft_plate.step`):
+`scraftpybind_plate.step`):
 
 ```
-python3 pysolidcraft.py 8080
-python3 pysolidcraft.py headless
+python3 scraftpybind.py 8080
+python3 scraftpybind.py headless
 ```
 """
 
@@ -69,6 +69,10 @@ Point3D: TypeAlias = tuple[float, float, float]  # pylint: disable=invalid-name
 # The longest SolidCraft takes to answer a request (3600 s for
 # `engine.batch`), plus a minute of slack.
 REPLY_TIMEOUT: float = 3660.0
+
+# How long a headless session gets to exit, in seconds: after its
+# output ends, or after its input is closed (it is then killed).
+EXIT_TIMEOUT: float = 10.0
 
 
 # Class `SolidCraftError`:
@@ -386,7 +390,7 @@ class HeadlessTransport(Transport):
             {
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": {"name": "pysolidcraft", "version": "0"},
+                "clientInfo": {"name": "scraftpybind", "version": "0"},
             },
         )
         self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -455,9 +459,14 @@ class HeadlessTransport(Transport):
         Returns:
         * (`str`): Its exit status and the end of its standard error.
         """
-        # Wait for the exit status, then read what it wrote.
+        # Wait for the exit status (its output can end before it
+        # exits), then read what it wrote.
         assert self.process is not None and self.errors is not None
-        status: int | None = self.process.poll()
+        status: int | None
+        try:
+            status = self.process.wait(timeout=EXIT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            status = None
         self.errors.seek(0)
         text: str = self.errors.read().decode("utf-8", "replace").strip()
         return f"the session stopped ({status=}): {text[-500:]}"
@@ -516,7 +525,7 @@ class HeadlessTransport(Transport):
             if self.process.stdin is not None:
                 self.process.stdin.close()
             try:
-                self.process.wait(timeout=10)
+                self.process.wait(timeout=EXIT_TIMEOUT)
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait()
@@ -589,7 +598,7 @@ class Namespace:
 
 
 # Begin the generated command classes.
-# Never edit them: they are written by `pysolidcraft_generate.py`.
+# Never edit them: they are written by `scraftpybind_generate.py`.
 
 # The `format` of `assembly.bom`.
 AssemblyBomFormat: TypeAlias = Literal["csv", "json"]
@@ -19464,13 +19473,13 @@ class ViewCommands(Namespace):
         )
 
 
-# Class `PySolidCraft`:
+# Class `SolidCraftPyBind`:
 @dataclass(slots=True)
-class PySolidCraft:
-    """The top level of `pysolidcraft`: SolidCraft's commands.
+class SolidCraftPyBind:
+    """The top level of `scraftpybind`: SolidCraft's commands.
 
     The commands are grouped by namespace, so `sketch.create` is
-    `PySolidCraft.sketch.create()`.
+    `SolidCraftPyBind.sketch.create()`.
 
     Attributes:
     * `transport` (`Transport`): How the commands are sent.
@@ -19552,7 +19561,7 @@ class PySolidCraft:
       The `view.*` commands.
 
     Constructor:
-    * `PySolidCraft(transport)`
+    * `SolidCraftPyBind(transport)`
     """
 
     # Constructor arguments:
@@ -19598,7 +19607,7 @@ class PySolidCraft:
     timeline: TimelineCommands = field(init=False)
     view: ViewCommands = field(init=False)
 
-    # Method `PySolidCraft.__post_init__()`:
+    # Method `SolidCraftPyBind.__post_init__()`:
     def __post_init__(self) -> None:
         """Make the namespaces, all sharing the one transport."""
         self.appearance = AppearanceCommands(self.transport)
@@ -19640,13 +19649,15 @@ class PySolidCraft:
         self.timeline = TimelineCommands(self.transport)
         self.view = ViewCommands(self.transport)
 
-    # Method `PySolidCraft.execute()`:
+    # Method `SolidCraftPyBind.execute()`:
     def execute(self, command: str, params: Mapping[str, JSON]) -> JSON:
         """Run any SolidCraft command by its id (`engine.execute`).
 
         Arguments:
         * `command` (`str`): The command id (e.g. `sketch.create`).
-        * `params` (`Mapping[str, JSON]`): The command's parameters.
+        * `params` (`Mapping[str, JSON]`):
+          The command's parameters; those that are `None` are not
+          sent, as for the namespaces' methods.
 
         Returns:
         * (`JSON`): The command's result.
@@ -19654,9 +19665,7 @@ class PySolidCraft:
         Raises:
         * `SolidCraftError`: If the command fails.
         """
-        return self.transport.request(
-            "engine.execute", {"command": command, "params": params}
-        )
+        return Namespace(self.transport).execute(command, params)
 
 
 # End the generated command classes.
@@ -19668,7 +19677,7 @@ def main() -> int:
 
     The one optional argument is a GUI's control port (default: the one
     in `current.port`, which only a SolidCraft on its default port
-    writes), or `headless`, which exports `pysolidcraft_plate.step`.
+    writes), or `headless`, which exports `scraftpybind_plate.step`.
 
     Returns:
     * (`int`): The exit status.
@@ -19676,7 +19685,7 @@ def main() -> int:
     # Connect to the GUI, or start a headless session.
     where: str = sys.argv[1] if len(sys.argv) > 1 else "0"
     with connect(where) as transport:
-        solidcraft: PySolidCraft = PySolidCraft(transport)
+        solidcraft: SolidCraftPyBind = SolidCraftPyBind(transport)
 
         # Sketch a 100 x 60 mm rectangle with a 20 mm circle inside it.
         solidcraft.sketch.create(plane="XY", name="Plate")
@@ -19700,11 +19709,12 @@ def main() -> int:
         solidcraft.appearance.assign(bodies=["Plate"], color="#ADD8E6")
         solidcraft.view.apply(view="iso")
         if isinstance(transport, HeadlessTransport):
-            step: Path = Path("pysolidcraft_plate.step").resolve()
+            step: Path = Path("scraftpybind_plate.step").resolve()
             solidcraft.file.export(path=str(step))
             print(f"Wrote {step}")
     return 0
 
 
-if __name__ == "__main__":
+# Run as a program (only by the live tests).
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

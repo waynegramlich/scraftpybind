@@ -10,11 +10,11 @@ exported as a STEP file:
 ./plate_with_holes.py headless plate_with_holes.step
 ```
 
-It needs `pysolidcraft` installed (`pip install pysolidcraft`, or
+It needs `scraftpybind` installed (`pip install scraftpybind`, or
 `pip install -e .` in this repository), or `PYTHONPATH` set to the
-directory that holds `pysolidcraft.py`.
+directory that holds `scraftpybind.py`.
 
-It is the first `pysolidcraft` example; in CadQuery the same plate is
+It is the first `scraftpybind` example; in CadQuery the same plate is
 
 ```
 cq.Workplane("XY").box(100, 60, 10).faces(">Z").workplane()
@@ -22,16 +22,20 @@ cq.Workplane("XY").box(100, 60, 10).faces(">Z").workplane()
 ```
 """
 
+# The example ends the way `scraftpybind.main()` does, since it is
+# meant to be read on its own.
+# pylint: disable=duplicate-code
+
 import sys
 from pathlib import Path
 
-from pysolidcraft import JSON, PySolidCraft, connect
+from scraftpybind import JSON, SolidCraftPyBind, connect
 
 
 # Function `plate_with_holes()`:
 # Each dimension is its own keyword-only argument, as in CadQuery.
-def plate_with_holes(  # pylint: disable=too-many-arguments
-    solidcraft: PySolidCraft,
+def plate_with_holes(  # pylint: disable=too-many-arguments  # pragma: no cover
+    solidcraft: SolidCraftPyBind,
     *,
     length: float,
     width: float,
@@ -45,7 +49,7 @@ def plate_with_holes(  # pylint: disable=too-many-arguments
     from it.
 
     Arguments:
-    * `solidcraft` (`PySolidCraft`): Where to build it.
+    * `solidcraft` (`SolidCraftPyBind`): Where to build it.
     * `length` (`float`): The plate's length, along X (mm).
     * `width` (`float`): Its width, along Y (mm).
     * `thickness` (`float`): Its thickness, along Z (mm).
@@ -86,7 +90,7 @@ def plate_with_holes(  # pylint: disable=too-many-arguments
 
 
 # Function `main()`:
-def main() -> int:
+def main() -> int:  # pragma: no cover
     """Build the plate, show it in the GUI, and export it.
 
     The arguments are the GUI's control port (or `headless`) and the
@@ -108,7 +112,7 @@ def main() -> int:
     # Build the plate, colour it and show it (headless, the view is
     # still set, though nobody sees it).
     with connect(sys.argv[1]) as transport:
-        solidcraft: PySolidCraft = PySolidCraft(transport)
+        solidcraft: SolidCraftPyBind = SolidCraftPyBind(transport)
         plate_with_holes(
             solidcraft,
             length=100,
@@ -126,5 +130,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

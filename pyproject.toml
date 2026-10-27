@@ -1,4 +1,4 @@
-# The `pysolidcraft` package: the single module `pysolidcraft.py`, which
+# The `scraftpybind` package: the single module `scraftpybind.py`, which
 # drives SolidCraft (https://solidcraft.io/) from Python.  Nothing
 # outside the standard library is needed to run it; SolidCraft itself
 # (its GUI, or `solidcraft-cli` for headless sessions) is installed
@@ -9,7 +9,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pysolidcraft"
+name = "scraftpybind"
 dynamic = ["version"]
 description = "Python bindings for SolidCraft: one method per SolidCraft command"
 readme = "README.md"
@@ -29,7 +29,7 @@ classifiers = [
 ]
 
 [project.scripts]
-pysolidcraft = "pysolidcraft:main"
+scraftpybind = "scraftpybind:main"
 
 [project.urls]
 Homepage = "https://github.com/waynegramlich/scraftpybind"
@@ -37,11 +37,11 @@ Issues = "https://github.com/waynegramlich/scraftpybind/issues"
 SolidCraft = "https://github.com/tangency-labs/solidcraft"
 
 [tool.setuptools]
-py-modules = ["pysolidcraft"]
+py-modules = ["scraftpybind"]
 
 [tool.setuptools.dynamic]
-version = { attr = "pysolidcraft.__version__" }
+version = { attr = "scraftpybind.__version__" }
 
 [tool.pylint.main]
-# `examples/` imports `pysolidcraft` from the top directory.
+# `examples/` imports `scraftpybind` from the top directory.
 source-roots = ["."]

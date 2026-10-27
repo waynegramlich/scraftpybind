@@ -1,17 +1,17 @@
-# `pysolidcraft`: Python Bindings for SolidCraft
+# `scraftpybind`: Python Bindings for SolidCraft
 
 [SolidCraft](https://github.com/tangency-labs/solidcraft) is an open
 source CAD program in which every action is a command, reachable from
-`solidcraft-cli`, a JSON control port and an MCP server.  `pysolidcraft`
+`solidcraft-cli`, a JSON control port and an MCP server.  `scraftpybind`
 turns each of those commands into a typed Python method, so a design
 can be written as an ordinary Python program:
 
 ```python
-from pysolidcraft import PySolidCraft, connect
+from scraftpybind import SolidCraftPyBind, connect
 
 # A GUI started with `solidcraft --control 8080`; or "headless".
 with connect("8080") as transport:
-    solidcraft = PySolidCraft(transport)
+    solidcraft = SolidCraftPyBind(transport)
 
     # A 100 x 60 mm rectangle with a 20 mm hole, extruded 10 mm.
     solidcraft.sketch.create(plane="XY", name="Plate")
@@ -27,7 +27,7 @@ with connect("8080") as transport:
     )
 ```
 
-This is what `python3 pysolidcraft.py 8080` runs;
+This is what `python3 scraftpybind.py 8080` runs;
 `examples/plate_with_holes.py` is a longer example.
 
 ## Status
@@ -38,8 +38,8 @@ Python bindings; comments are welcome in the issues.
 
 ## How It Works
 
-* `PySolidCraft` holds one object per command namespace:
-  `sketch.rectangle.center` is `PySolidCraft.sketch.rectangle_center()`.
+* `SolidCraftPyBind` holds one object per command namespace:
+  `sketch.rectangle.center` is `SolidCraftPyBind.sketch.rectangle_center()`.
   Parameters left at `None` are not sent, so SolidCraft uses its own
   defaults.
 * A `Transport` carries the requests:
@@ -49,10 +49,10 @@ Python bindings; comments are welcome in the issues.
   * `HeadlessTransport` runs `solidcraft-cli mcp --headless`, a design
     session with no window (useful with `file.export`).
 * `connect("8080")` or `connect("headless")` picks one.
-* The command classes are generated: `pysolidcraft_generate.py` reads
+* The command classes are generated: `scraftpybind_generate.py` reads
   the command list from `solidcraft-cli` (or the cached
-  `pysolidcraft_commands.json`) and rewrites the generated region of
-  `pysolidcraft.py`.
+  `scraftpybind_commands.json`) and rewrites the generated region of
+  `scraftpybind.py`.
 
 ## Requirements
 
@@ -63,10 +63,37 @@ Python bindings; comments are welcome in the issues.
 
 ## Trying It
 
+In a GUI, which must be running first, so that the plate can be
+watched as it is built:
+
 ```
-python3 pysolidcraft.py 8080        # A GUI started with --control 8080.
-python3 pysolidcraft.py headless    # Writes pysolidcraft_plate.step.
+solidcraft --control 8080 &         # Start a GUI with control port 8080.
+python3 scraftpybind.py 8080        # Build the plate in it.
+kill %1                             # Close the GUI when done.
 ```
+
+Or headless, with no GUI at all:
+
+```
+python3 scraftpybind.py headless    # Writes scraftpybind_plate.step.
+```
+
+## Testing
+
+```
+python3 -m unittest -v
+```
+
+The offline tests use a fake control port and a fake `solidcraft-cli`.
+With `solidcraft-cli` on the `PATH`, the live tests also build plates
+headless and measure the STEP files; with `SCRAFTPYBIND_TEST_PORT` set
+to the port of a GUI started with `--control PORT`, one more test adds
+a plate to its design.
+
+The lines that the offline tests do not reach end with
+`# pragma: no cover` (`grep -rn "pragma: no cover" .` lists them).  As
+in `coverage.py`, a mark on a `def`, `class` or `if` line covers its
+whole block.
 
 ## License
 
